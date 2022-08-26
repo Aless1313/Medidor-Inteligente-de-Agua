@@ -2,6 +2,9 @@
 
 /*Sensor de flujo de agua*/
 #define SENSORAGUA 14
+#define wifi_btn 13
+#define wps_btn 12
+
 
 long currentMillis = 0;
 long previousMillis = 0;
@@ -15,6 +18,8 @@ unsigned long totalMilliLitres;
 float flowLitres;
 float totalLitres;
 
+
+
 void IRAM_ATTR pulseCounter(){
   pulseCount++;
 }
@@ -26,6 +31,17 @@ void setup() {
   flowRate = 0;
   flowMililliLitres = 0;
   totalLitres = 0;
+
+  pinMode(wps_btn, INPUT);
+  pinMode(wifi_btn, INPUT);
+
+  if(digitalRead(wps_btn) == HIGH){
+    Serial.println("wps");
+  }
+
+  if(digitalRead(wifi_btn) == HIGH){
+    Serial.println("wifi");
+  }
 
   attachInterrupt(digitalPinToInterrupt(SENSORAGUA), pulseCounter, FALLING);
   pinMode(LED_BUILTIN, OUTPUT);
