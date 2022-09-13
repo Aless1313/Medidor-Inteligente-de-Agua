@@ -2,6 +2,8 @@
 #include <PubSubClient.h>
 #include <ESP8266Wifi.h>
 #include <dht.h>
+#include <ArduinoJson.h>
+
 
 #define dht_apin 0
 dht DHT;
@@ -53,6 +55,7 @@ void IRAM_ATTR pulseCounter(){
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(9600);
+  while (!Serial) continue;
   pulseCount = 0;
   flowRate = 0;
   flowMililliLitres = 0;
@@ -74,7 +77,7 @@ void setup() {
   client.setServer(mqtt_server,mqtt_port);
   client.setCallback(callback);
 
- 
+
 
   attachInterrupt(digitalPinToInterrupt(SENSORAGUA), pulseCounter, FALLING);
   pinMode(LED_BUILTIN, OUTPUT);
@@ -90,7 +93,11 @@ void loop() {
   // put your main code here, to run repeatedly:
   currentMillis = millis();
 
- 
+  StaticJsonDocument<256> doc;
+  doc["Device"]="ESP8266";
+  doc["time"]=123123;
+
+   
   if(currentMillis - previousMillis > interval){
     pulse1sec = pulseCount;
     pulseCount = 0;
@@ -116,9 +123,7 @@ void loop() {
     client.publish("values", msg);
     Serial.println("Enviado a topico");
 
-    String flujo2 = flujo;
-    flujo2.toCharArray(msg2, 20);
-    client.publish("flujo", msg2);
+   
     
     DHT.read11(dht_apin);
     
@@ -129,7 +134,22 @@ void loop() {
     Serial.print(DHT.temperature); 
     Serial.println("C  ");
 
+    JsonArray data = doc.createNestedArray("data");
+    data.add(flowRate);                               //Flujo
+    data.add(totalLitres);                            //Litros
+    data.add(DHT.temperature);                        //Temperatura
+    data.add(DHT.humidity);                           //Humedad
+    data.add(0);                                      //Estado de valvula
+
+    char out[128];
+    int b = serializeJson(doc, out);
+    Serial.print("bytes = ");
+    Serial.println(b,DEC);
     
+    client.publish("dada", out);
+
+  
+   
 
     
   }
