@@ -1,6 +1,11 @@
 #include <Arduino.h>
 #include <PubSubClient.h>
 #include <ESP8266Wifi.h>
+#include <dht.h>
+
+#define dht_apin 0
+dht DHT;
+
 
 const char* ssid = "Fisica Pato2";
 const char* password = "q1w2e3r4t5";
@@ -69,6 +74,8 @@ void setup() {
   client.setServer(mqtt_server,mqtt_port);
   client.setCallback(callback);
 
+ 
+
   attachInterrupt(digitalPinToInterrupt(SENSORAGUA), pulseCounter, FALLING);
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, LOW);
@@ -83,6 +90,7 @@ void loop() {
   // put your main code here, to run repeatedly:
   currentMillis = millis();
 
+ 
   if(currentMillis - previousMillis > interval){
     pulse1sec = pulseCount;
     pulseCount = 0;
@@ -111,6 +119,19 @@ void loop() {
     String flujo2 = flujo;
     flujo2.toCharArray(msg2, 20);
     client.publish("flujo", msg2);
+    
+    DHT.read11(dht_apin);
+    
+    Serial.print("Current humidity = ");
+    Serial.print(DHT.humidity);
+    Serial.print("%  ");
+    Serial.print("temperature = ");
+    Serial.print(DHT.temperature); 
+    Serial.println("C  ");
+
+    
+
+    
   }
     
   /*
