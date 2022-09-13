@@ -3,10 +3,15 @@
 #include <ESP8266Wifi.h>
 #include <dht.h>
 #include <ArduinoJson.h>
+#include <NTPClient.h>
+#include <WiFiUdp.h>
 
 
 #define dht_apin 0
 dht DHT;
+
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP, "0.south-america.pool.ntp.org",-21600,6000);
 
 
 const char* ssid = "Fisica Pato2";
@@ -77,6 +82,8 @@ void setup() {
   client.setServer(mqtt_server,mqtt_port);
   client.setCallback(callback);
 
+  timeClient.begin(); 
+
 
 
   attachInterrupt(digitalPinToInterrupt(SENSORAGUA), pulseCounter, FALLING);
@@ -85,7 +92,7 @@ void setup() {
 }
 
 void loop() {
-
+  timeClient.update();
   if(!client.connected()){
     reconnect();
   }
@@ -94,8 +101,9 @@ void loop() {
   currentMillis = millis();
 
   StaticJsonDocument<256> doc;
-  doc["Device"]="ESP8266";
-  doc["time"]=123123;
+  doc["Device"]=WiFi.macAddress();
+  doc["time"]=timeClient.getFormattedTime();
+  doc["date"]=timeClient.getDay();
 
    
   if(currentMillis - previousMillis > interval){
@@ -141,10 +149,10 @@ void loop() {
     data.add(DHT.humidity);                           //Humedad
     data.add(0);                                      //Estado de valvula
 
-    char out[128];
+    char out[256];
     int b = serializeJson(doc, out);
     Serial.print("bytes = ");
-    Serial.println(b,DEC);
+    Serial.println(out);
     
     client.publish("dada", out);
 
