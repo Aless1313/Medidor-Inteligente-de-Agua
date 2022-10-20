@@ -195,26 +195,35 @@ void setup() {
 }
 
 void loop() {
+
+  /*Actualización de reloj de internet*/
   timeClient.update();
+  
+  /*Conectando a cliente mqtt*/
   if(!client.connected()){
     reconnect();
   }
   client.loop();
-  // put your main code here, to run repeatedly:
+
+  //Variable de contadora de tiempo
   currentMillis = millis();
 
+  /*Documento json para enviar información por mqtt*/
   StaticJsonDocument<256> doc;
   doc["Device"]=WiFi.macAddress();
   doc["time"]=timeClient.getFormattedTime();
   doc["date"]=timeClient.getDay();
  
+  /*Definir tiempo de intervalo entre actualizaciones mqtt*/
   if(currentMillis - previousMillis > interval){
     pulse1sec = pulseCount;
     pulseCount = 0;
 
+    /*Conteo de pulsos en un segundo en el sensor de flujo*/
     flowRate = ((1000.0 /(millis() - previousMillis)) * pulse1sec) / calibrationFactor;
     previousMillis = millis();
 
+    /*Conversión de flujo a litros*/
     flowLitres = (flowRate/60);
     totalLitres += flowLitres;
 
@@ -226,6 +235,21 @@ void loop() {
     Serial.print("Litros consumidos: ");
     Serial.print(totalLitres);
     Serial.println("L");
+
+    display.clearDisplay();
+    display.setCursor(0,0);  //oled display
+    display.setTextSize(1);
+    display.setTextColor(WHITE);
+    display.print("Flujo de agua:");
+    display.setCursor(90,0);
+    display.print(flowRate);
+    display.setCursor(0,20);
+    display.print("Litros consumidos: ");
+    display.setCursor(0,30);
+    display.print(totalLitres);
+    display.setCursor(0,50);
+    display.print(timeClient.getFormattedTime());
+    display.display();
 
     String flujo = String(flowRate, 3); 
     String to_Send = flujo;
