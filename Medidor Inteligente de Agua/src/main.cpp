@@ -108,6 +108,8 @@ void setuppage();
 void saveeeprom();
 void save_conf();
 void modeconf();
+void modewps();
+bool startWPSPBC();
 String leer(int addr);
 
 /*Funcion para leer pulsos del sensor de flujo de agua*/
@@ -149,6 +151,8 @@ void setup() {
     display.print("Modo WPS, Presione wps en su router por 5segundos");
     display.display();
     Serial.println("wps");
+    delay(3000);
+    modewps();
   }
 
   if(estateap == HIGH){
@@ -438,4 +442,55 @@ void setup_wifi(){
     display.display();
     Serial.print("Error de conexión");
   }
+}
+
+/*Setup wps*/
+bool startWPSPBC(){
+  display.clearDisplay();
+  display.setCursor(10,0);  //oled display
+  display.setTextSize(1);
+  display.setTextColor(WHITE);
+  display.print("WPS Start");
+  display.display();
+
+  WiFi.mode(WIFI_STA);
+  WiFi.begin("foobar", "");
+  while(WiFi.status() == WL_CONNECTED){
+    display.setCursor(10,0);  //oled display
+    display.setTextSize(1);
+    display.setTextColor(WHITE);
+    display.print("Conectando...");
+    display.display();
+  }
+  bool wpsSuccess = WiFi.beginWPSConfig();
+  if(wpsSuccess){
+    String newSSID = WiFi.SSID();
+    if(newSSID.length() > 0 ){
+      display.clearDisplay();
+      display.setCursor(10,0);  //oled display
+      display.setTextSize(1);
+      display.setTextColor(WHITE);
+      display.print("WPS finished. Connected successfull to SSID");
+      display.setCursor(30,20);
+      display.print(newSSID.c_str());
+      display.display();
+
+      saveeeprom(0, newSSID);
+      saveeeprom(50, WiFi.psk());
+    }else{
+      wpsSuccess = false;
+    }
+  }
+  return wpsSuccess;
+}
+
+void modewps(){
+  display.clearDisplay();
+  display.setCursor(10,0);  //oled display
+  display.setTextSize(1);
+  display.setTextColor(WHITE);
+  display.print("Presiona WPS en el router...");
+  display.display();
+  delay(3000);
+  startWPSPBC();
 }
