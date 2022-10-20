@@ -1,18 +1,36 @@
 #include <Arduino.h>
 
+//Libreria para conexión a internet
 #include <PubSubClient.h>
 #include <ESP8266Wifi.h>
 #include <ESP8266WebServer.h>
+
+//Libreria para sensor de temperatura y humedad
 #include <dht.h>
 
+//Librerias para EEPROM, JSON y Hora de internet
 #include <ArduinoJson.h>
 #include <EEPROM.h>
 #include <NTPClient.h>
 #include <WiFiUdp.h>
 
+//Librerias para pantalla oled
+#include <SPI.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+/*Definicion de pantalla*/
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+#define OLED_RESET -1
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+//Definición de sensor de temperatura
 #define dht_apin 0
 dht DHT;
 
+/*Variables de conexion a internet*/
 int contconexion = 0;
 char ssid[50];
 char pass[50];
@@ -22,6 +40,11 @@ const char *passconf = "";
 IPAddress ip(192, 168, 1, 200);
 IPAddress gateway(192, 168, 1, 1);
 IPAddress subnet(255, 255, 255, 0);
+
+WiFiClient espClient;
+PubSubClient client(espClient);
+ESP8266WebServer server(80);
+
 
 //-----------CODIGO HTML PAGINA DE CONFIGURACION---------------
 String pagina = "<!DOCTYPE html>"
@@ -44,24 +67,6 @@ String paginafin = "</body>"
 "</html>";
 String mensaje = "";
 
-/*SETUP WIFI*/
-void setup_wifi(){
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssidconf,passconf);
-  while(WiFi.status() != WL_CONNECTED and contconexion <50){
-    ++contconexion;
-    delay(350);
-    Serial.print(".");
-  }
-  if(contconexion<50){
-    Serial.print("");
-    Serial.println("Conectado");
-    Serial.print(WiFi.localIP());
-  }else{
-    Serial.print("Error de conexión");
-  }
-}
-
 /*Setup de reloj*/
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "0.south-america.pool.ntp.org",-21600,6000);
@@ -73,10 +78,8 @@ const char* mqtt_user ="admin";
 const char* mqtt_pass = "public";
 
 int led = 16;
-WiFiClient espClient;
-PubSubClient client(espClient);
-ESP8266WebServer server(80);
 
+/*Mensajeria entrante de mqtt*/
 long lastMsg = 0;
 char msg[25];
 char msg2[25];
@@ -85,7 +88,6 @@ char msg2[25];
 #define SENSORAGUA 14
 #define wifi_btn 13
 #define wps_btn 12
-
 
 long currentMillis = 0;
 long previousMillis = 0;
@@ -108,49 +110,81 @@ void save_conf();
 void modeconf();
 String leer(int addr);
 
-
+/*Funcion para leer pulsos del sensor de flujo de agua*/
 void IRAM_ATTR pulseCounter(){
   pulseCount++;
 }
 
 void setup() {
-  // put your setup code here, to run once:
+  //Iniciando comunicación serial
   Serial.begin(9600);
-  
+
+  //Iniciando memoria eeprom para guardar credenciales de wifi
+  EEPROM.begin(512);
+
+  //Iniciando valores de sensor en 0 para su primer uso
   pulseCount = 0;
   flowRate = 0;
   flowMililliLitres = 0;
   totalLitres = 0;
-
+  
+  //Iniciando pantalla oled
+  display.begin(SSD1306_SWITCHCAPVCC,0x3C);
+  display.display();
+  delay(500);
+  display.clearDisplay();
+  
+  //Definición de botones de configuración
   pinMode(wps_btn, INPUT);
   pinMode(wifi_btn, INPUT);
 
-  if(digitalRead(wps_btn) == HIGH){
+  //Lectura de estados de botones de configuración
+  int estatewps=digitalRead(wps_btn);
+  int estateap=digitalRead(wifi_btn);
+
+  if(estatewps == HIGH){
+    display.setCursor(10,0);  //oled display
+    display.setTextSize(1);
+    display.setTextColor(WHITE);
+    display.print("Modo WPS, Presione wps en su router por 5segundos");
+    display.display();
     Serial.println("wps");
   }
 
-  if(digitalRead(wifi_btn) == HIGH){
+  if(estateap == HIGH){
+    display.setCursor(10,0);  //oled display
+    display.setTextSize(1);
+    display.setTextColor(WHITE);
+    display.print("Modo Access Point");
+    display.display();
     Serial.println("wifi");
     modeconf();
   }
 
-  modeconf();
-
-  delay(3000);
+  //Leer credenciales guardadas
   leer(0).toCharArray(ssid, 50);
   leer(50).toCharArray(pass, 50);
+  setup_wifi();
 
   while (WiFi.status() != WL_CONNECTED){
-  setup_wifi();
+    display.clearDisplay();
+    display.setCursor(10,0);  //oled display
+    display.setTextSize(1);
+    display.setTextColor(WHITE);
+    display.print("No se puede iniciar sin internet");
+    display.display();
+    delay(2000);
+    setup();
   }
 
+  //Clientes de mqtt
   client.setServer(mqtt_server,mqtt_port);
   client.setCallback(callback);
 
+  //Cliente de reloj de internet
   timeClient.begin(); 
 
- 
-
+  //Definición de sensor de flujo y led
   attachInterrupt(digitalPinToInterrupt(SENSORAGUA), pulseCounter, FALLING);
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, LOW);
@@ -320,12 +354,33 @@ void save_conf(){
 }
 
 void modeconf(){
+  
+  delay(100);
+  digitalWrite(13, HIGH);
+  delay(100);
+  digitalWrite(13, LOW);
+  delay(100);
+  digitalWrite(13, HIGH);
+  delay(100);
+  digitalWrite(13, LOW);
+  
   Serial.println("Modo AccessPoint");
   WiFi.softAP(ssidconf, passconf);
   //WiFi.softAPConfig(ip,gateway,subnet);
   IPAddress myIP = WiFi.softAPIP();
   Serial.println(myIP);
   Serial.println("Server iniciado");
+
+  display.clearDisplay();
+  display.setCursor(10,0);  //oled display
+  display.setTextSize(1);
+  display.setTextColor(WHITE);
+  display.print("Access Point iniciado en:");
+  display.setCursor(10,30);  //oled display
+  display.setTextSize(1);
+  display.setTextColor(WHITE);
+  display.print(myIP);
+  display.display();
 
   server.on("/", setuppage);
   server.on("/guardar_conf", save_conf);
@@ -334,5 +389,53 @@ void modeconf(){
 
   while(true){
     server.handleClient();
+  }
+}
+
+/*SETUP WIFI*/
+void setup_wifi(){
+  WiFi.mode(WIFI_STA); //Iniciando en modo estación
+  WiFi.begin(ssid, pass); //Iniciando con credenciales guardadas
+  
+  display.clearDisplay();
+  display.setCursor(10,0);  //oled display
+  display.setTextSize(1);
+  display.setTextColor(WHITE);
+  display.print(ssid);
+  display.setCursor(10,50);  //oled display
+  display.setTextSize(1);
+  display.setTextColor(WHITE);
+  display.print(pass);
+  display.setCursor(10,80);  //oled display
+  display.setTextSize(1);
+  display.setTextColor(WHITE);
+  display.print("Intentando conexion");
+  display.display();
+  
+
+  while(WiFi.status() != WL_CONNECTED and contconexion <50){
+    ++contconexion;
+    delay(350);
+    Serial.print(".");
+  }
+
+  if(contconexion<50){
+    Serial.print("");
+    Serial.println("Conectado");
+    Serial.print(WiFi.localIP());
+    
+    display.clearDisplay();
+    display.setCursor(10,0);  //oled display
+    display.setTextSize(1);
+    display.setTextColor(WHITE);
+    display.print("Conexion Wifi Establecida");
+    display.display();
+  }else{
+    display.setCursor(10,0);  //oled display
+    display.setTextSize(1);
+    display.setTextColor(WHITE);
+    display.print("Error de conexion");
+    display.display();
+    Serial.print("Error de conexión");
   }
 }
