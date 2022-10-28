@@ -26,6 +26,14 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
+/*Libreria de Servo*/
+#include <Servo.h>
+
+/*Definicion de Servo*/
+#define Servo_PWM 15
+Servo MG995_Servo;
+
+
 /*Definicion de pantalla*/
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
@@ -518,6 +526,9 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(SENSORAGUA), pulseCounter, FALLING);
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, LOW);
+
+  //Definicion de Servo
+  MG995_Servo.attach(Servo_PWM);
 }
 
 void loop() {
@@ -609,6 +620,18 @@ void loop() {
     client.publish("dada", out);
     
   }
+
+  MG995_Servo.write(0);
+  delay(3000);
+  MG995_Servo.detach();
+  delay(2000);
+  MG995_Servo.attach(Servo_PWM);
+  MG995_Servo.write(180);
+  delay(3000);
+  MG995_Servo.detach();
+  delay(2000);
+  MG995_Servo.attach(Servo_PWM);
+
 }
 
 void callback(char* topic, byte* payload, int length ){
