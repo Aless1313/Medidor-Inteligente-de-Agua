@@ -19,6 +19,7 @@
 #include <NTPClient.h>
 #include <WiFiUdp.h>
 #include <time.h>
+#include <WiFiClient.h>
 
 /*Librerias para pantalla oled*/
 #include <SPI.h>
@@ -27,11 +28,11 @@
 #include <Adafruit_SSD1306.h>
 
 /*Libreria de Servo*/
-#include <Servo.h>
+//#include <Servo.h>
 
 /*Definicion de Servo*/
-#define Servo_PWM 15
-Servo MG995_Servo;
+//#define Servo_PWM 15
+//Servo MG995_Servo;
 
 
 /*Definicion de pantalla*/
@@ -63,6 +64,10 @@ IPAddress subnet(255, 255, 255, 0);
 WiFiClient espClient;
 PubSubClient client(espClient);
 ESP8266WebServer server(80);
+
+char *host = "water-meter.tk";
+String strhost = "water-meter.tk";
+String strurl = "/registerdevice.php";
 
 
 //-----------CODIGO HTML PAGINA DE CONFIGURACION---------------
@@ -100,6 +105,7 @@ const char* mqtt_pass = "public";
 long lastMsg = 0;
 char msg[25];
 char msg2[25];
+char msg3[50];
 
 /*Sensor de flujo de agua*/
 #define SENSORAGUA 14
@@ -528,7 +534,7 @@ void setup() {
   digitalWrite(LED_BUILTIN, LOW);
 
   //Definicion de Servo
-  MG995_Servo.attach(Servo_PWM);
+  //MG995_Servo.attach(Servo_PWM);
 }
 
 void loop() {
@@ -616,11 +622,14 @@ void loop() {
     Serial.print("bytes = ");
     Serial.println(out);
     Serial.print(b);
-    
-    client.publish("dada", out);
+
+    char out2[256];
+    String tosendd = String(flujo) + "," + String(totalLitres) + "," + String(totalLitres/1000) + "," + String(WiFi.macAddress()) + "," + String(DHT.temperature) + "," + String(DHT.humidity) + "," + "$85"; 
+    tosendd.toCharArray(msg3, 100);
+    client.publish("commands", msg3);
     
   }
-
+/*
   MG995_Servo.write(0);
   delay(3000);
   MG995_Servo.detach();
@@ -631,7 +640,7 @@ void loop() {
   MG995_Servo.detach();
   delay(2000);
   MG995_Servo.attach(Servo_PWM);
-
+*/
 }
 
 void callback(char* topic, byte* payload, int length ){
@@ -647,12 +656,12 @@ void callback(char* topic, byte* payload, int length ){
   incoming.trim();
   Serial.println("Mensaje -> " + incoming);
 
-  if(incoming == "ON"){
-    digitalWrite(LED_BUILTIN, HIGH);
+  if(incoming == "on"){
+    digitalWrite(ledconf, HIGH);
   }
   
-  if(incoming == "OFF"){
-      digitalWrite(LED_BUILTIN, LOW);
+  if(incoming == "off"){
+      digitalWrite(ledconf, LOW);
   }
 }
 
@@ -664,7 +673,7 @@ void reconnect(){
 
     if(client.connect(clientId.c_str(), mqtt_user, mqtt_pass)){
       Serial.println("Conectado a mqtt");
-      client.subscribe("led");
+      client.subscribe("servo");
       Serial.println("Subscrito a topico");
     }else{
       Serial.println("Fallo ->" + client.state());
