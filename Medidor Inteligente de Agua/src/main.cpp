@@ -9,6 +9,7 @@
 #include <PubSubClient.h>
 #include <ESP8266Wifi.h>
 #include <ESP8266WebServer.h>
+#include <ESP8266HTTPClient.h>
 
 /*Libreria para sensor de temperatura y humedad*/
 #include <dht.h>
@@ -65,9 +66,7 @@ WiFiClient espClient;
 PubSubClient client(espClient);
 ESP8266WebServer server(80);
 
-char *host = "water-meter.tk";
-String strhost = "water-meter.tk";
-String strurl = "/registerdevice.php";
+const String SERVER_ADDRESS = "http://water-meter.tk/php/registerdevice.php";
 
 
 //-----------CODIGO HTML PAGINA DE CONFIGURACION---------------
@@ -101,6 +100,10 @@ const int mqtt_port = 1883;
 const char* mqtt_user ="admin";
 const char* mqtt_pass = "public";
 
+const char* host = "http://water-meter.tk";
+const int   port = 8080;
+HTTPClient http;
+
 /*Mensajeria entrante de mqtt*/
 long lastMsg = 0;
 char msg[25];
@@ -126,6 +129,7 @@ float totalLitres;
 /*Variables para tiempos*/
 long currentMillis = 0;
 long previousMillis = 0;
+long previousMillis2 = 0;
 
 /*Definición de funciones*/
 void setup_wifi();
@@ -138,6 +142,8 @@ void modeconf();
 void modewps();
 bool startWPSPBC();
 void parpadeoled();
+void senddata();
+String enviardatos(String datos);
 String leer(int addr);
 
 /*Funcion para leer pulsos del sensor de flujo de agua*/
@@ -481,7 +487,8 @@ void setup() {
   int estatewps=digitalRead(wps_btn);
   int estateap=digitalRead(wifi_btn);
 
-  /*Modo wps*/
+  
+  /*
   if(estatewps == HIGH){
     ticker.attach(0.3, parpadeoled);
     display.setCursor(10,0);  //oled display
@@ -493,8 +500,9 @@ void setup() {
     delay(3000);
     modewps();
   }
+  
 
-  /*Modo access point*/
+  
   if(estateap == HIGH){
     ticker.attach(0.3, parpadeoled);
     display.setCursor(10,0);  //oled display
@@ -503,6 +511,8 @@ void setup() {
     Serial.println("wifi");
     modeconf();
   }
+*/
+  
 
   //Leer credenciales wifi guardadas en eeprom
   leer(0).toCharArray(ssid, 50);
@@ -535,6 +545,11 @@ void setup() {
 
   //Definicion de Servo
   //MG995_Servo.attach(Servo_PWM);
+  String mac = WiFi.macAddress();
+
+  senddata();
+
+
 }
 
 void loop() {
@@ -627,6 +642,8 @@ void loop() {
     String tosendd = String(flujo) + "," + String(totalLitres) + "," + String(totalLitres/1000) + "," + String(WiFi.macAddress()) + "," + String(DHT.temperature) + "," + String(DHT.humidity) + "," + "$85"; 
     tosendd.toCharArray(msg3, 100);
     client.publish("commands", msg3);
+
+
     
   }
 /*
@@ -641,6 +658,7 @@ void loop() {
   delay(2000);
   MG995_Servo.attach(Servo_PWM);
 */
+
 }
 
 void callback(char* topic, byte* payload, int length ){
@@ -854,3 +872,19 @@ void parpadeoled(){
   digitalWrite(ledconf, !stateled);
 }
 
+void senddata(){
+  if (WiFi.status() == WL_CONNECTED){
+    HTTPClient http;
+    String datasend = "mac=" + String(WiFi.macAddress());
+
+    http.begin(espClient, "http://water-meter.tk/php/registerdevice.php");
+    http.addHeader("content-Type", "application/x-www-form-urlencoded");
+
+    int rcode = http.POST(datasend);
+
+    Serial.println(String(rcode));
+
+    http.end();
+
+  }
+}
