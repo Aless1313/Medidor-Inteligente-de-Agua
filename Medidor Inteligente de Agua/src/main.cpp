@@ -125,6 +125,7 @@ unsigned long flowMililliLitres;
 unsigned long totalMilliLitres;
 float flowLitres;
 float totalLitres;
+int costo = 0;
 
 /*Variables para tiempos*/
 long currentMillis = 0;
@@ -142,7 +143,9 @@ void modeconf();
 void modewps();
 bool startWPSPBC();
 void parpadeoled();
-void senddata();
+void registerdevice();
+void removerCaracteres(char *cadena, char *caracteres);
+void sendata(String consumo, String temp, String hum, String costo, String mcubic);
 String enviardatos(String datos);
 String leer(int addr);
 
@@ -547,7 +550,7 @@ void setup() {
   //MG995_Servo.attach(Servo_PWM);
   String mac = WiFi.macAddress();
 
-  senddata();
+  registerdevice();
 
 
 }
@@ -638,26 +641,43 @@ void loop() {
     Serial.println(out);
     Serial.print(b);
 
-    char out2[256];
-    String tosendd = String(flujo) + "," + String(totalLitres) + "," + String(totalLitres/1000) + "," + String(WiFi.macAddress()) + "," + String(DHT.temperature) + "," + String(DHT.humidity) + "," + "$85"; 
-    tosendd.toCharArray(msg3, 100);
-    client.publish("commands", msg3);
+    //Creando cadena para topico
+    String wifiad = String(WiFi.macAddress());
+    const char* wiff = wifiad.c_str();
+    const char* val = "/values";
 
+    char char_array[wifiad.length()+1];
+    char caracteres[] = ":";
+    strcpy(char_array, wifiad.c_str());
+    Serial.println(char_array);
+    Serial.println(caracteres);
+    removerCaracteres(char_array, caracteres);
+    Serial.println(char_array);
 
+    char buff[50];
+    strcpy(buff,char_array);
+    strcat(buff,val);
+
+    int mmcubic = totalLitres/1000;
+    costo = 60*mmcubic; 
+    //Preparando y enviando datos a topico    
+    String tosendd = String(flujo) + "," + String(totalLitres) + "," + String(totalLitres/1000) + "," + String(WiFi.macAddress()) + "," + String(DHT.temperature) + "," + String(DHT.humidity) + "," + String(costo); 
+    tosendd.toCharArray(msg3, 200);
+
+    client.publish(buff, msg3);
+    Serial.println(buff);
     
   }
-/*
-  MG995_Servo.write(0);
-  delay(3000);
-  MG995_Servo.detach();
-  delay(2000);
-  MG995_Servo.attach(Servo_PWM);
-  MG995_Servo.write(180);
-  delay(3000);
-  MG995_Servo.detach();
-  delay(2000);
-  MG995_Servo.attach(Servo_PWM);
-*/
+
+  if(currentMillis - previousMillis2 > 15000){
+    previousMillis2 = millis();
+
+    int mmcubic = totalLitres/1000;
+    costo = 60*mmcubic;
+    Serial.println("actualizacion");
+
+    sendata(String(totalLitres), String(DHT.temperature), String(DHT.humidity), String(costo), String(totalLitres/1000));
+  }
 
 }
 
@@ -872,10 +892,22 @@ void parpadeoled(){
   digitalWrite(ledconf, !stateled);
 }
 
-void senddata(){
+void registerdevice(){
+  String wifiad = String(WiFi.macAddress());
+  const char* wiff = wifiad.c_str();
+  const char* val = "/values";
+
+  char char_array[wifiad.length()+1];
+  char caracteres[] = ":";
+  strcpy(char_array, wifiad.c_str());
+  Serial.println(char_array);
+  Serial.println(caracteres);
+  removerCaracteres(char_array, caracteres);
+  Serial.println(char_array);
+
   if (WiFi.status() == WL_CONNECTED){
     HTTPClient http;
-    String datasend = "mac=" + String(WiFi.macAddress());
+    String datasend = "mac=" + String(char_array);
 
     http.begin(espClient, "http://water-meter.tk/php/registerdevice.php");
     http.addHeader("content-Type", "application/x-www-form-urlencoded");
@@ -887,4 +919,64 @@ void senddata(){
     http.end();
 
   }
+}
+
+void sendata(String consumo, String temp, String hum, String costo, String mcubic){
+  String wifiad = String(WiFi.macAddress());
+  const char* wiff = wifiad.c_str();
+  const char* val = "/values";
+
+  char char_array[wifiad.length()+1];
+  char caracteres[] = ":";
+  strcpy(char_array, wifiad.c_str());
+  Serial.println(char_array);
+  Serial.println(caracteres);
+  removerCaracteres(char_array, caracteres);
+  Serial.println(char_array);
+
+  if(WiFi.status() == WL_CONNECTED){
+    HTTPClient http;
+    String datatosend = "mac=" + String(char_array) + "&consumo=" + consumo + "&temperatura=" + temp + "&humedad=" + hum + "&costo=" + costo + "&mcubic=" + mcubic;
+    //http://water-meter.tk/php/actualizar.php?mac=123456&consumo=1222&temperatura=435454&humedad=4545345&costo=34534&mcubic=23423
+    //http://water-meter.tk/php/actualizar.php?mac=A4:CF:12:D9:FF:7E&consumo=0.00&temperatura=0.00&humedad=0.00&costo=0&mcubic=0.00
+    Serial.println(datatosend);
+    http.begin(espClient, "http://water-meter.tk/php/actualizar.php");
+    http.addHeader("content-Type", "application/x-www-form-urlencoded");
+
+    int rcode = http.POST(datatosend);
+
+    Serial.println(String(rcode));
+
+    http.end();
+
+  }
+}
+
+
+void removerCaracteres(char *cadena, char *caracteres) {
+  int indiceCadena = 0, indiceCadenaLimpia = 0;
+  int deberiaAgregarCaracter = 1;
+  // Recorrer cadena carácter por carácter
+  while (cadena[indiceCadena]) {
+    // Primero suponemos que la letra sí debe permanecer
+    deberiaAgregarCaracter = 1;
+    int indiceCaracteres = 0;
+    // Recorrer los caracteres prohibidos
+    while (caracteres[indiceCaracteres]) {
+      // Y si la letra actual es uno de los caracteres, ya no se agrega
+      if (cadena[indiceCadena] == caracteres[indiceCaracteres]) {
+        deberiaAgregarCaracter = 0;
+      }
+      indiceCaracteres++;
+    }
+    // Dependiendo de la variable de arriba, la letra se agrega a la "nueva
+    // cadena"
+    if (deberiaAgregarCaracter) {
+      cadena[indiceCadenaLimpia] = cadena[indiceCadena];
+      indiceCadenaLimpia++;
+    }
+    indiceCadena++;
+  }
+  // Al final se agrega el carácter NULL para terminar la cadena
+  cadena[indiceCadenaLimpia] = 0;
 }
